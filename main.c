@@ -1,0 +1,80 @@
+/* main.c
+ *
+ * Copyright (C) 2013 10gen, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+
+#include <errno.h>
+#include <stdio.h>
+
+#include "mdb.h"
+
+
+#define ARGC_FAILURE   1
+#define DB_FAILURE     2
+#define NS_FAILURE     3
+#define EXTENT_FAILURE 4
+
+
+int
+main (int   argc,
+      char *argv[])
+{
+   const bson_t *b;
+   extent_t extent;
+   record_t record;
+   char *str;
+   db_t db;
+   ns_t ns;
+
+   if (argc != 2) {
+      fprintf(stderr, "usage: mdbdump DBPATH DBNAME\n");
+      return ARGC_FAILURE;
+   }
+
+   errno = 0;
+   if (!!db_init(&db, argv[1], argv[2])) {
+      perror("Failed to load database");
+      return DB_FAILURE;
+   }
+
+   errno = 0;
+   if (!!db_namespaces(&db, &ns)) {
+      perror("Failed to load namespaces");
+      return NS_FAILURE;
+   }
+
+   do {
+      fprintf(stdout, "\nNamespace \"%s\"\n\n", ns_name(&ns));
+      if (!!ns_extents(&ns, &extent)) {
+         perror("Failed to load extent");
+         return EXTENT_FAILURE;
+      }
+      if (!extent_records(&extent, &record)) {
+         do {
+            b = record_bson(&record);
+            if ((str = bson_as_json(b, NULL))) {
+               puts(str);
+            }
+            bson_free(str);
+         } while (record_next(&record));
+      }
+   } while (ns_next(&ns));
+
+   db_destroy(&db);
+
+   return 0;
+}
