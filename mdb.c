@@ -71,6 +71,17 @@ typedef struct {
 #pragma pack(pop)
 
 
+#pragma pack(push, 1)
+typedef struct {
+   bson_int32_t length;
+   bson_int32_t extent_offset;
+   bson_int32_t next_offset;
+   bson_int32_t prev_offset;
+   char         data[4];
+} record_header_t;
+#pragma pack(pop)
+
+
 /*
  *--------------------------------------------------------------------------
  *
@@ -85,7 +96,7 @@ typedef struct {
  *       @path is the path to the file.
  *
  * Returns:
- *       0 on success; otherwise -1 and errno is set.
+ *       0 on success -- otherwise -1 and errno is set.
  *
  * Side effects:
  *       file is initialized if successful.
@@ -245,7 +256,7 @@ file_extents (file_t *file,     /* IN */
  *       load the individual database files such as dbpath/name.ns.
  *
  * Returns:
- *       0 on success; otherwise -1 and errno is set.
+ *       0 on success -- otherwise -1 and errno is set.
  *
  * Side effects:
  *       db is initialized.
@@ -334,7 +345,7 @@ failure:
  *       ns_next();
  *
  * Returns:
- *       0 on success; otherwise -1 and errno is set.
+ *       0 on success -- otherwise -1 and errno is set.
  *
  * Side effects:
  *       ns is initialized.
@@ -368,13 +379,99 @@ db_namespaces (db_t *db,   /* IN */
 /*
  *--------------------------------------------------------------------------
  *
+ * ns_name --
+ *
+ *       Fetch the name of the namespace.
+ *
+ * Returns:
+ *       None.
+ *
+ * Side effects:
+ *       None.
+ *
+ *--------------------------------------------------------------------------
+ */
+
+const char *
+ns_name (const ns_t *ns)
+{
+   if (!ns) {
+      errno = EINVAL;
+      return NULL;
+   }
+
+   return "TODO: Get ns name from current record.";
+}
+
+
+/*
+ *--------------------------------------------------------------------------
+ *
+ * ns_next --
+ *
+ *       Move to the next namespace entry in the "dbname.ns" file.
+ *
+ * Returns:
+ *       0 on success -- otherwise -1 and errno is set.
+ *
+ * Side effects:
+ *       ns is updated to reflect the next namespace.
+ *
+ *--------------------------------------------------------------------------
+ */
+
+int
+ns_next (ns_t *ns)
+{
+   if (!ns) {
+      errno = EINVAL;
+      return -1;
+   }
+
+   return record_next(&ns->record);
+}
+
+
+/*
+ *--------------------------------------------------------------------------
+ *
+ * ns_extents --
+ *
+ *       Fetches the first extent for the current namespace. You can move
+ *       to the next extent with ns_next().
+ *
+ * Returns:
+ *       0 on success -- otherwise -1 and errno is set.
+ *
+ * Side effects:
+ *       extent is initialized.
+ *
+ *--------------------------------------------------------------------------
+ */
+
+int
+ns_extents (ns_t *ns,         /* IN */
+            extent_t *extent) /* OUT */
+{
+   if (!ns || !extent) {
+      errno = EINVAL;
+      return -1;
+   }
+
+   return -1;
+}
+
+
+/*
+ *--------------------------------------------------------------------------
+ *
  * extent_records --
  *
  *       Fetches the first record in an extent. You can move to the next
  *       record using record_next().
  *
  * Returns:
- *       0 on success; otherwise -1 and errno is set.
+ *       0 on success -- otherwise -1 and errno is set.
  *
  * Side effects:
  *       record is initialized.
@@ -386,10 +483,130 @@ int
 extent_records (extent_t *extent,   /* IN */
                 record_t *record)   /* OUT */
 {
+   extent_header_t *ehdr;
+
    if (!extent || !record) {
       errno = EINVAL;
       return -1;
    }
 
+   ehdr = (extent_header_t *)extent->map;
+
+   memset(record, 0, sizeof *record);
+
+   if (ehdr->first_record.offset < 0) {
+      errno = EBADF;
+      return -1;
+   }
+
+   record->map = extent->map;
+   record->offset = ehdr->first_record.offset;
+
    return 0;
+}
+
+
+/*
+ *--------------------------------------------------------------------------
+ *
+ * record_next --
+ *
+ *       Move the record_t to the next record in the extent.
+ *
+ * Returns:
+ *       0 on success -- otherwise -1 and errno is set.
+ *
+ * Side effects:
+ *       record is updated to point to new record.
+ *
+ *--------------------------------------------------------------------------
+ */
+
+int
+record_next (record_t *record) /* IN/OUT */
+{
+   record_header_t *rhdr;
+
+   if (!record) {
+      errno = EINVAL;
+      return -1;
+   }
+
+   rhdr = (record_header_t *)(record->map + record->offset);
+   if (rhdr->next_offset < 0) {
+      return -1;
+   }
+
+   record->offset = rhdr->next_offset;
+
+   return 0;
+}
+
+
+/*
+ *--------------------------------------------------------------------------
+ *
+ * record_bson --
+ *
+ *       Get the BSON document associated with the record. You may iterate
+ *       through the document using bson_iter_*() functions.
+ *
+ * Returns:
+ *       A const bson_t* on success -- otherwise NULL and errno is set.
+ *
+ * Side effects:
+ *       None.
+ *
+ *--------------------------------------------------------------------------
+ */
+
+const bson_t *
+record_bson (record_t *record)
+{
+   record_header_t *rhdr;
+   bson_uint8_t *data = NULL;
+   size_t datalen = 0;
+
+   if (!record) {
+      errno = EINVAL;
+      return NULL;
+   }
+
+   rhdr = (record_header_t *)(record->map + record->offset);
+   data = (bson_uint8_t *)rhdr->data;
+   datalen = rhdr->length - 16;
+
+   if (bson_init_static(&record->bson, data, datalen)) {
+      return &record->bson;
+   }
+
+   return NULL;
+}
+
+
+/*
+ *--------------------------------------------------------------------------
+ *
+ * db_destroy --
+ *
+ *       Release resources associated with the structure to the system
+ *       and close any open files.
+ *
+ * Returns:
+ *       None.
+ *
+ * Side effects:
+ *       Everything.
+ *
+ *--------------------------------------------------------------------------
+ */
+
+void
+db_destroy (db_t *db)
+{
+   bson_return_if_fail(db);
+
+   /*
+    * TODO: Free up everything and close files.
+    */
 }

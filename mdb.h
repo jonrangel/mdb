@@ -76,7 +76,8 @@ int extent_records (extent_t *extent,
 struct _record_t
 {
    const char *map;
-   size_t      maplen;
+   off_t offset;
+   bson_t bson;
 };
 
 
