@@ -28,6 +28,49 @@
 #include "mdb.h"
 
 
+#define EXTENT_MAGIC BSON_UINT32_TO_LE(0x41424344)
+
+
+#pragma pack(push, 1)
+typedef struct {
+   bson_int32_t fileno;
+   bson_int32_t offset;
+} file_loc_t;
+#pragma pack(pop)
+
+
+BSON_STATIC_ASSERT(sizeof(file_loc_t) == 8);
+
+
+#pragma pack(push, 1)
+typedef struct {
+   bson_int32_t version;
+   bson_int32_t version_minor;
+   bson_int32_t file_length;
+   file_loc_t   unused;
+   bson_int32_t unused_length;
+   char         reserved[8192 - 4*4 - 8];
+   char         data[4];
+} file_header_t;
+#pragma pack(pop)
+
+
+BSON_STATIC_ASSERT(sizeof(file_header_t)-4 == 8192);
+
+
+#pragma pack(push, 1)
+typedef struct {
+   file_loc_t   my_loc;
+   file_loc_t   next;
+   file_loc_t   prev;
+   char         namespace[128];
+   bson_int32_t length;
+   file_loc_t   first_record;
+   file_loc_t   last_record;
+} extent_header_t;
+#pragma pack(pop)
+
+
 /*
  *--------------------------------------------------------------------------
  *
@@ -129,6 +172,66 @@ file_close (file_t *file) /* IN */
    file->maplen = 0;
 
    return close(fd);
+}
+
+
+/*
+ *--------------------------------------------------------------------------
+ *
+ * file_extents --
+ *
+ *       Fetches the first extent within a file.
+ *
+ * Returns:
+ *       None.
+ *
+ * Side effects:
+ *       None.
+ *
+ *--------------------------------------------------------------------------
+ */
+
+static int
+file_extents (file_t *file,     /* IN */
+              extent_t *extent) /* OUT */
+{
+   extent_header_t *ehdr;
+   file_header_t *fhdr;
+   bson_int32_t magic = EXTENT_MAGIC;
+
+   if (!file || !extent) {
+      errno = EINVAL;
+      return -1;
+   }
+
+   if (file->maplen < sizeof *fhdr) {
+      errno = EBADF;
+      return -1;
+   }
+
+   fhdr = (file_header_t *)file->map;
+
+   if (!!memcmp(fhdr->data, &magic, sizeof magic)) {
+      errno = EBADF;
+      return -1;
+   }
+
+   ehdr = (extent_header_t *)fhdr->data;
+
+   /*
+    * TODO: Check if ehdr puts us past EOF.
+    */
+
+   BSON_ASSERT(file->fileno == ehdr->my_loc.fileno);
+   BSON_ASSERT(file->fileno == ehdr->first_record.fileno);
+   BSON_ASSERT(file->fileno == ehdr->last_record.fileno);
+
+   memset(extent, 0, sizeof *extent);
+
+   extent->map = (char *)ehdr;
+   extent->maplen = file->maplen - (((char *)fhdr) - ((char *)ehdr));
+
+   return 0;
 }
 
 
@@ -249,6 +352,44 @@ db_namespaces (db_t *db,   /* IN */
    }
 
    memset(ns, 0, sizeof *ns);
+
+   if (!!file_extents(&db->nsfile, &ns->extent)) {
+      return -1;
+   }
+
+   if (!!extent_records(&ns->extent, &ns->record)) {
+      return -1;
+   }
+
+   return 0;
+}
+
+
+/*
+ *--------------------------------------------------------------------------
+ *
+ * extent_records --
+ *
+ *       Fetches the first record in an extent. You can move to the next
+ *       record using record_next().
+ *
+ * Returns:
+ *       0 on success; otherwise -1 and errno is set.
+ *
+ * Side effects:
+ *       record is initialized.
+ *
+ *--------------------------------------------------------------------------
+ */
+
+int
+extent_records (extent_t *extent,   /* IN */
+                record_t *record)   /* OUT */
+{
+   if (!extent || !record) {
+      errno = EINVAL;
+      return -1;
+   }
 
    return 0;
 }

@@ -80,8 +80,8 @@ struct _record_t
 };
 
 
-int           record_next    (record_t *record);
-const bson_t *record_bson    (record_t *record);
+int           record_next (record_t *record);
+const bson_t *record_bson (record_t *record);
 
 
 struct _ns_t
