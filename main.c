@@ -40,7 +40,7 @@ main (int   argc,
    db_t db;
    ns_t ns;
 
-   if (argc != 2) {
+   if (argc != 3) {
       fprintf(stderr, "usage: mdbdump DBPATH DBNAME\n");
       return ARGC_FAILURE;
    }
