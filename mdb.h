@@ -1,6 +1,6 @@
 /* mdb.h
  *
- * Copyright (C) 2013 Christian Hergert <christian@hergert.me>
+ * Copyright (C) 2013 10gen, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
