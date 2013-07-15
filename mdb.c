@@ -555,6 +555,7 @@ int
 ns_extents (ns_t *ns,         /* IN */
             extent_t *extent) /* OUT */
 {
+   const bson_int32_t magic = EXTENT_MAGIC;
    ns_hash_node_t *node;
    ns_details_t *details;
    file_loc_t *loc;
@@ -580,9 +581,19 @@ ns_extents (ns_t *ns,         /* IN */
       return -1;
    }
 
+   printf("Extent offset (fileno=%u): %u\n",
+          loc->fileno, loc->offset);
+
    extent->db = ns->db;
-   extent->map = ns->db->files[loc->fileno].map + loc->offset;
-   extent->maplen = ns->db->files[loc->fileno].maplen - loc->offset;
+   extent->map = ns->db->files[loc->fileno].map;
+   extent->maplen = ns->db->files[loc->fileno].maplen;
+   extent->offset = loc->offset;
+
+   if (!!memcmp(extent->map + extent->offset, &magic, sizeof magic)) {
+      memset(extent, 0, sizeof *extent);
+      errno = EBADF;
+      return -1;
+   }
 
    return 0;
 }
