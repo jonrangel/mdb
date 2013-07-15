@@ -94,8 +94,12 @@ typedef struct {
    bson_int32_t length;
    file_loc_t   first_record;
    file_loc_t   last_record;
+   char         padding[4];
 } extent_header_t;
 #pragma pack(pop)
+
+
+BSON_STATIC_ASSERT(sizeof(extent_header_t) == 176);
 
 
 #pragma pack(push, 1)
@@ -234,67 +238,6 @@ file_close (file_t *file) /* IN */
    file->maplen = 0;
 
    return close(fd);
-}
-
-
-/*
- *--------------------------------------------------------------------------
- *
- * file_extents --
- *
- *       Fetches the first extent within a file.
- *
- * Returns:
- *       None.
- *
- * Side effects:
- *       None.
- *
- *--------------------------------------------------------------------------
- */
-
-//static
-int
-file_extents (file_t *file,     /* IN */
-              extent_t *extent) /* OUT */
-{
-   extent_header_t *ehdr;
-   file_header_t *fhdr;
-   bson_int32_t magic = EXTENT_MAGIC;
-
-   if (!file || !extent) {
-      errno = EINVAL;
-      return -1;
-   }
-
-   if (file->maplen < sizeof *fhdr) {
-      errno = EBADF;
-      return -1;
-   }
-
-   fhdr = (file_header_t *)file->map;
-
-   if (!!memcmp(fhdr->data, &magic, sizeof magic)) {
-      errno = EBADF;
-      return -1;
-   }
-
-   ehdr = (extent_header_t *)fhdr->data;
-
-   /*
-    * TODO: Check if ehdr puts us past EOF.
-    */
-
-   BSON_ASSERT(file->fileno == ehdr->my_loc.fileno);
-   BSON_ASSERT(file->fileno == ehdr->first_record.fileno);
-   BSON_ASSERT(file->fileno == ehdr->last_record.fileno);
-
-   memset(extent, 0, sizeof *extent);
-
-   extent->map = (char *)ehdr;
-   extent->maplen = file->maplen - (((char *)fhdr) - ((char *)ehdr));
-
-   return 0;
 }
 
 
@@ -627,7 +570,9 @@ extent_records (extent_t *extent,   /* IN */
       return -1;
    }
 
-   ehdr = (extent_header_t *)extent->map;
+   printf("records call: offset=%u\n", extent->offset);
+
+   ehdr = (extent_header_t *)(extent->map + extent->offset);
 
    memset(record, 0, sizeof *record);
 
@@ -636,8 +581,12 @@ extent_records (extent_t *extent,   /* IN */
       return -1;
    }
 
-   record->map = extent->map;
+   printf("First offset: %u\n", ehdr->first_record.offset);
+
+   record->map = extent->map + extent->offset + sizeof(extent_header_t);
    record->offset = ehdr->first_record.offset;
+
+   printf("Offset of record is: %u\n", (int)record->offset);
 
    return 0;
 }
@@ -669,7 +618,12 @@ record_next (record_t *record) /* IN/OUT */
       return -1;
    }
 
+
    rhdr = (record_header_t *)(record->map + record->offset);
+
+   printf("next record: %d\n",
+          rhdr->next_offset);
+
    if (rhdr->next_offset < 0) {
       errno = ENOENT;
       return -1;

@@ -63,9 +63,10 @@ void db_destroy     (db_t *db);
 
 struct _extent_t
 {
-   db_t       *db;
-   const char *map;
-   size_t      maplen;
+   db_t         *db;
+   const char   *map;
+   size_t        maplen;
+   bson_int32_t  offset;
 };
 
 
