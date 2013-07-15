@@ -390,6 +390,7 @@ db_namespaces (db_t *db,   /* IN */
 
    memset(ns, 0, sizeof *ns);
 
+   ns->db = db;
    ns->file = &db->nsfile;
    ns->index = -1;
 
@@ -528,12 +529,36 @@ int
 ns_extents (ns_t *ns,         /* IN */
             extent_t *extent) /* OUT */
 {
-   if (!ns || !extent) {
+   ns_hash_node_t *node;
+   ns_details_t *details;
+   file_loc_t *loc;
+
+   if (!ns || !ns->db || !extent) {
       errno = EINVAL;
       return -1;
    }
 
-   return -1;
+   memset(extent, 0, sizeof extent);
+
+   if (!(node = ns_hash_node(ns))) {
+      errno = ENOENT;
+      return -1;
+   }
+
+   details = (ns_details_t *)node->details;
+   loc = &details->first_extent;
+
+   if ((loc->fileno >= ns->db->filescnt) ||
+       (loc->offset >= ns->db->files[loc->fileno].maplen)) {
+      errno = ENOENT;
+      return -1;
+   }
+
+   extent->db = ns->db;
+   extent->map = ns->db->files[loc->fileno].map + loc->offset;
+   extent->maplen = ns->db->files[loc->fileno].maplen - loc->offset;
+
+   return 0;
 }
 
 

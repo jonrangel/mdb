@@ -63,6 +63,7 @@ void db_destroy     (db_t *db);
 
 struct _extent_t
 {
+   db_t       *db;
    const char *map;
    size_t      maplen;
 };
@@ -87,7 +88,8 @@ const bson_t *record_bson (record_t *record);
 
 struct _ns_t
 {
-   int index;
+   db_t   *db;
+   int     index;
    file_t *file;
 };
 
