@@ -511,7 +511,7 @@ ns_extents (ns_t *ns,         /* IN */
       return -1;
    }
 
-   memset(extent, 0, sizeof extent);
+   memset(extent, 0, sizeof *extent);
 
    if (!(node = ns_hash_node(ns))) {
       errno = ENOENT;
