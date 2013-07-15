@@ -46,6 +46,10 @@
  * (closed) hashtable. We just use the mmap of the file and hard code our
  * offsets for the NamespaceDetails (as it is in C++ server).
  *
+ * You might notice that a lot of field types are signed integers. While
+ * I'm not a fan of this, it seems that they are meant to be signed, so
+ * we are in Rome it seems.
+ *
  *   -- Christian Hergert
  */
 
