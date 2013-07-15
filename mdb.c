@@ -671,6 +671,7 @@ record_next (record_t *record) /* IN/OUT */
 
    rhdr = (record_header_t *)(record->map + record->offset);
    if (rhdr->next_offset < 0) {
+      errno = ENOENT;
       return -1;
    }
 
