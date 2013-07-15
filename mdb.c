@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <stddef.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -31,7 +32,7 @@
 /*
  * Hello reader,
  *
- * This currently does not check endianness or any of that Jazz. It simply
+ * This currently does NOT CHECK ENDIANNESS or any of that Jazz. It simply
  * reads the data as it is on disk. Also, it doesn't bring in all the features
  * of the disk layer since that would cause me to be more careful with the
  * following disk structures.
@@ -87,6 +88,7 @@ BSON_STATIC_ASSERT(sizeof(file_header_t)-4 == 8192);
 
 #pragma pack(push, 1)
 typedef struct {
+   bson_int32_t magic;
    file_loc_t   my_loc;
    file_loc_t   next;
    file_loc_t   prev;
@@ -94,11 +96,11 @@ typedef struct {
    bson_int32_t length;
    file_loc_t   first_record;
    file_loc_t   last_record;
-   char         padding[4];
 } extent_header_t;
 #pragma pack(pop)
 
 
+BSON_STATIC_ASSERT(offsetof(extent_header_t, first_record) == 160);
 BSON_STATIC_ASSERT(sizeof(extent_header_t) == 176);
 
 
@@ -524,9 +526,6 @@ ns_extents (ns_t *ns,         /* IN */
       return -1;
    }
 
-   printf("Extent offset (fileno=%u): %u\n",
-          loc->fileno, loc->offset);
-
    extent->db = ns->db;
    extent->map = ns->db->files[loc->fileno].map;
    extent->maplen = ns->db->files[loc->fileno].maplen;
@@ -570,23 +569,16 @@ extent_records (extent_t *extent,   /* IN */
       return -1;
    }
 
-   printf("records call: offset=%u\n", extent->offset);
-
-   ehdr = (extent_header_t *)(extent->map + extent->offset);
-
    memset(record, 0, sizeof *record);
 
+   ehdr = (extent_header_t *)(extent->map + extent->offset);
    if (ehdr->first_record.offset < 0) {
       errno = EBADF;
       return -1;
    }
 
-   printf("First offset: %u\n", ehdr->first_record.offset);
-
-   record->map = extent->map + extent->offset + sizeof(extent_header_t);
+   record->map = extent->map;
    record->offset = ehdr->first_record.offset;
-
-   printf("Offset of record is: %u\n", (int)record->offset);
 
    return 0;
 }
@@ -620,10 +612,6 @@ record_next (record_t *record) /* IN/OUT */
 
 
    rhdr = (record_header_t *)(record->map + record->offset);
-
-   printf("next record: %d\n",
-          rhdr->next_offset);
-
    if (rhdr->next_offset < 0) {
       errno = ENOENT;
       return -1;
@@ -656,8 +644,7 @@ const bson_t *
 record_bson (record_t *record)
 {
    record_header_t *rhdr;
-   bson_uint8_t *data = NULL;
-   size_t datalen = 0;
+   bson_int32_t len;
 
    if (!record) {
       errno = EINVAL;
@@ -665,10 +652,11 @@ record_bson (record_t *record)
    }
 
    rhdr = (record_header_t *)(record->map + record->offset);
-   data = (bson_uint8_t *)rhdr->data;
-   datalen = rhdr->length - 16;
 
-   if (bson_init_static(&record->bson, data, datalen)) {
+   memcpy(&len, rhdr->data, 4);
+   BSON_ASSERT(len <= rhdr->length);
+
+   if (bson_init_static(&record->bson, (bson_uint8_t *)rhdr->data, len)) {
       return &record->bson;
    }
 
