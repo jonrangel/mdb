@@ -70,7 +70,7 @@ main (int   argc,
                puts(str);
             }
             bson_free(str);
-         } while (record_next(&record));
+         } while (!record_next(&record));
       }
    } while (ns_next(&ns));
 
