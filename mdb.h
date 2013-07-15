@@ -87,8 +87,8 @@ const bson_t *record_bson (record_t *record);
 
 struct _ns_t
 {
-   extent_t extent;
-   record_t record;
+   int index;
+   file_t *file;
 };
 
 
@@ -96,7 +96,7 @@ int         ns_next        (ns_t *ns);
 const char *ns_name        (const ns_t *ns);
 int         ns_extents     (ns_t *ns,
                             extent_t *extent);
- 
+
 
 BSON_END_DECLS
 

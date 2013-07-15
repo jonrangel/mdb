@@ -28,7 +28,8 @@
 #include "mdb.h"
 
 
-#define EXTENT_MAGIC BSON_UINT32_TO_LE(0x41424344)
+#define EXTENT_MAGIC    BSON_UINT32_TO_LE(0x41424344)
+#define NS_DETAILS_SIZE 496
 
 
 #pragma pack(push, 1)
@@ -79,6 +80,30 @@ typedef struct {
    bson_int32_t prev_offset;
    char         data[4];
 } record_header_t;
+#pragma pack(pop)
+
+
+#pragma pack(push, 1)
+typedef struct {
+   bson_int32_t hash;
+   char key[128];
+   char details[496];
+} ns_hash_node_t;
+#pragma pack(pop)
+
+
+#pragma pack(push, 1)
+typedef struct {
+   file_loc_t first_extent;
+   file_loc_t last_extent;
+   file_loc_t buckets[19];
+   struct {
+      bson_int64_t datasize;
+      bson_int64_t nrecords;
+   } stats;
+   bson_int32_t last_extent_size;
+   bson_int32_t nindexes;
+} ns_details_t;
 #pragma pack(pop)
 
 
@@ -202,7 +227,8 @@ file_close (file_t *file) /* IN */
  *--------------------------------------------------------------------------
  */
 
-static int
+//static
+int
 file_extents (file_t *file,     /* IN */
               extent_t *extent) /* OUT */
 {
@@ -364,15 +390,43 @@ db_namespaces (db_t *db,   /* IN */
 
    memset(ns, 0, sizeof *ns);
 
-   if (!!file_extents(&db->nsfile, &ns->extent)) {
-      return -1;
+   ns->file = &db->nsfile;
+   ns->index = -1;
+
+   return ns_next(ns);
+}
+
+
+/*
+ *--------------------------------------------------------------------------
+ *
+ * ns_hash_node --
+ *
+ *       Fetch the ns_hash_node_t for the current namespace entry.
+ *
+ * Returns:
+ *       ns_hash_node_t* if sucessful -- otherwise NULL and errno is set.
+ *
+ * Side effects:
+ *       None.
+ *
+ *--------------------------------------------------------------------------
+ */
+
+static ns_hash_node_t *
+ns_hash_node (const ns_t *ns)
+{
+   ns_hash_node_t *node;
+
+   if (!ns || !ns->file || ns->index < 0) {
+      errno = EINVAL;
+      return NULL;
    }
 
-   if (!!extent_records(&ns->extent, &ns->record)) {
-      return -1;
-   }
+   node = (ns_hash_node_t *)ns->file->map;
+   node += ns->index;
 
-   return 0;
+   return node;
 }
 
 
@@ -395,12 +449,16 @@ db_namespaces (db_t *db,   /* IN */
 const char *
 ns_name (const ns_t *ns)
 {
+   ns_hash_node_t *node;
+
    if (!ns) {
       errno = EINVAL;
       return NULL;
    }
 
-   return "TODO: Get ns name from current record.";
+   node = ns_hash_node(ns);
+
+   return node->key;
 }
 
 
@@ -423,12 +481,29 @@ ns_name (const ns_t *ns)
 int
 ns_next (ns_t *ns)
 {
+   ns_hash_node_t *node;
+
    if (!ns) {
       errno = EINVAL;
       return -1;
    }
 
-   return record_next(&ns->record);
+next:
+   ns->index++;
+
+   node = ns_hash_node(ns);
+
+   if ((((char *)node) + sizeof *node) >
+       (ns->file->map + ns->file->maplen)) {
+      ns->index = -1;
+      return -1;
+   }
+
+   if (!node->key[0]) {
+      goto next;
+   }
+
+   return 0;
 }
 
 
