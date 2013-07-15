@@ -28,6 +28,28 @@
 #include "mdb.h"
 
 
+/*
+ * Hello reader,
+ *
+ * This currently does not check endianness or any of that Jazz. It simply
+ * reads the data as it is on disk. Also, it doesn't bring in all the features
+ * of the disk layer since that would cause me to be more careful with the
+ * following disk structures.
+ *
+ * This should serve, however, as a good explaination of the basic disk
+ * format for MongoDB.
+ *
+ * Making something concurrently access this data should be possible since
+ * this will only open files in O_RDONLY.
+ *
+ * The <dbname>.ns file is a bit tricky since it is actually a fixed size
+ * (closed) hashtable. We just use the mmap of the file and hard code our
+ * offsets for the NamespaceDetails (as it is in C++ server).
+ *
+ *   -- Christian Hergert
+ */
+
+
 #define EXTENT_MAGIC    BSON_UINT32_TO_LE(0x41424344)
 #define NS_DETAILS_SIZE 496
 
