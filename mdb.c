@@ -120,7 +120,7 @@ typedef struct {
 typedef struct {
    bson_int32_t hash;
    char key[128];
-   char details[496];
+   char details[NS_DETAILS_SIZE];
 } ns_hash_node_t;
 #pragma pack(pop)
 
@@ -136,6 +136,7 @@ typedef struct {
    } stats;
    bson_int32_t last_extent_size;
    bson_int32_t nindexes;
+   /* some stuff is missing */
 } ns_details_t;
 #pragma pack(pop)
 
@@ -537,6 +538,50 @@ ns_extents (ns_t *ns,         /* IN */
       errno = EBADF;
       return -1;
    }
+
+   return 0;
+}
+
+
+/*
+ *--------------------------------------------------------------------------
+ *
+ * extent_next --
+ *
+ *       Advances the extent_t to point at the next extent in the on-disk
+ *       linked list of extents.
+ *
+ * Returns:
+ *       0 on success -- otherwise -1 and errno is set.
+ *
+ * Side effects:
+ *       extent is updated to point at the next extent.
+ *
+ *--------------------------------------------------------------------------
+ */
+
+int
+extent_next (extent_t *extent) /* IN */
+{
+   extent_header_t *ehdr;
+   file_loc_t next;
+
+   if (!extent) {
+      errno = EINVAL;
+      return -1;
+   }
+
+   ehdr = (extent_header_t *)(extent->map + extent->offset);
+   next = ehdr->next;
+
+   if (next.fileno == -1) {
+      errno = ENOENT;
+      return -1;
+   }
+
+   extent->map = extent->db->files[next.fileno].map;
+   extent->maplen = extent->db->files[next.fileno].maplen;
+   extent->offset = next.offset;
 
    return 0;
 }

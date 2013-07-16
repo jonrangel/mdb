@@ -58,20 +58,22 @@ main (int   argc,
    }
 
    do {
-      fprintf(stdout, "\nNamespace \"%s\"\n\n", ns_name(&ns));
+      //fprintf(stdout, "\nNamespace \"%s\"\n\n", ns_name(&ns));
       if (!!ns_extents(&ns, &extent)) {
          perror("Failed to load extent");
          return EXTENT_FAILURE;
       }
-      if (!extent_records(&extent, &record)) {
-         do {
-            b = record_bson(&record);
-            if ((str = bson_as_json(b, NULL))) {
-               puts(str);
-            }
-            bson_free(str);
-         } while (!record_next(&record));
-      }
+      do {
+         if (!extent_records(&extent, &record)) {
+            do {
+               b = record_bson(&record);
+               if ((str = bson_as_json(b, NULL))) {
+                  puts(str);
+               }
+               bson_free(str);
+            } while (!record_next(&record));
+         }
+      } while (!extent_next(&extent));
    } while (ns_next(&ns));
 
    db_destroy(&db);
