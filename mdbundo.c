@@ -127,7 +127,7 @@ mdbundo (ns_t *ns)
                assert (FALSE);
             }
          } else {
-            //printf ("Failed to load document.\n");
+            fprintf (stderr, "Failed to load a document.\n");
          }
 
          loc.fileno = record->next_offset;
@@ -165,6 +165,9 @@ main (int   argc,
 
    snprintf (dotname, sizeof dotname, "%s.%s", dbname, colname);
    dotname [sizeof dotname - 1] = '\0';
+
+   fprintf (stderr, "Attempting undo of %s to stdout.\n",
+            dotname);
 
    if (0 != db_init (&db, dbpath, dbname)) {
       perror ("Failed to load database");
