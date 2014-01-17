@@ -127,7 +127,7 @@ mdbundo (ns_t *ns)
                assert (FALSE);
             }
          } else {
-            printf ("Failed to load document.\n");
+            //printf ("Failed to load document.\n");
          }
 
          loc.fileno = record->next_offset;
