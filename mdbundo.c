@@ -166,8 +166,6 @@ main (int   argc,
    snprintf (dotname, sizeof dotname, "%s.%s", dbname, colname);
    dotname [sizeof dotname - 1] = '\0';
 
-   printf ("Looking in \"%s\" for \"%s.%s\".\n", dbpath, dbname, colname);
-
    if (0 != db_init (&db, dbpath, dbname)) {
       perror ("Failed to load database");
       return EXIT_FAILURE;
