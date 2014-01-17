@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/types.h>
@@ -28,117 +29,6 @@
 #include <unistd.h>
 
 #include "mdb.h"
-
-
-/*
- * Hello reader,
- *
- * This currently does NOT CHECK ENDIANNESS or any of that Jazz. It simply
- * reads the data as it is on disk. Also, it doesn't bring in all the features
- * of the disk layer since that would cause me to be more careful with the
- * following disk structures.
- *
- * This should serve, however, as a good explaination of the basic disk
- * format for MongoDB.
- *
- * Making something concurrently access this data should be possible since
- * this will only open files in O_RDONLY.
- *
- * The <dbname>.ns file is a bit tricky since it is actually a fixed size
- * (closed) hashtable. We just use the mmap of the file and hard code our
- * offsets for the NamespaceDetails (as it is in C++ server).
- *
- * You might notice that a lot of field types are signed integers. While
- * I'm not a fan of this, it seems that they are meant to be signed, so
- * we are in Rome it seems.
- *
- *   -- Christian Hergert
- */
-
-
-#define EXTENT_MAGIC    BSON_UINT32_TO_LE(0x41424344)
-#define NS_DETAILS_SIZE 496
-
-
-#pragma pack(push, 1)
-typedef struct {
-   bson_int32_t fileno;
-   bson_int32_t offset;
-} file_loc_t;
-#pragma pack(pop)
-
-
-BSON_STATIC_ASSERT(sizeof(file_loc_t) == 8);
-
-
-#pragma pack(push, 1)
-typedef struct {
-   bson_int32_t version;
-   bson_int32_t version_minor;
-   bson_int32_t file_length;
-   file_loc_t   unused;
-   bson_int32_t unused_length;
-   char         reserved[8192 - 4*4 - 8];
-   char         data[4];
-} file_header_t;
-#pragma pack(pop)
-
-
-BSON_STATIC_ASSERT(sizeof(file_header_t)-4 == 8192);
-
-
-#pragma pack(push, 1)
-typedef struct {
-   bson_int32_t magic;
-   file_loc_t   my_loc;
-   file_loc_t   next;
-   file_loc_t   prev;
-   char         namespace[128];
-   bson_int32_t length;
-   file_loc_t   first_record;
-   file_loc_t   last_record;
-} extent_header_t;
-#pragma pack(pop)
-
-
-BSON_STATIC_ASSERT(offsetof(extent_header_t, first_record) == 160);
-BSON_STATIC_ASSERT(sizeof(extent_header_t) == 176);
-
-
-#pragma pack(push, 1)
-typedef struct {
-   bson_int32_t length;
-   bson_int32_t extent_offset;
-   bson_int32_t next_offset;
-   bson_int32_t prev_offset;
-   char         data[4];
-} record_header_t;
-#pragma pack(pop)
-
-
-#pragma pack(push, 1)
-typedef struct {
-   bson_int32_t hash;
-   char key[128];
-   char details[NS_DETAILS_SIZE];
-} ns_hash_node_t;
-#pragma pack(pop)
-
-
-#pragma pack(push, 1)
-typedef struct {
-   file_loc_t first_extent;
-   file_loc_t last_extent;
-   file_loc_t buckets[19];
-   struct {
-      bson_int64_t datasize;
-      bson_int64_t nrecords;
-   } stats;
-   bson_int32_t last_extent_size;
-   bson_int32_t nindexes;
-   /* some stuff is missing */
-} ns_details_t;
-#pragma pack(pop)
 
 
 /*
@@ -191,7 +81,7 @@ file_init (file_t *file,     /* OUT */
       return -1;
    }
 
-   if (!(map = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0))) {
+   if (!(map = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0))) {
       close(fd);
       return -1;
    }
@@ -540,6 +430,19 @@ ns_extents (ns_t *ns,         /* IN */
    }
 
    return 0;
+}
+
+
+ns_details_t *
+ns_get_details (ns_t *ns)
+{
+   char *base;
+
+   base = ns->file->map;
+   base = base + (sizeof (ns_hash_node_t) * ns->index);
+   base = base + offsetof (ns_hash_node_t, details);
+
+   return (ns_details_t *)base;
 }
 
 
